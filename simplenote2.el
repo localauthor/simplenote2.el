@@ -48,6 +48,7 @@
 (require 'uuidgen)
 (require 'unicode-escape)
 (require 'simplenote2-list)
+(require 'cl-macs)
 
 (defcustom simplenote2-directory (expand-file-name "~/.simplenote2/")
   "Simplenote directory."
@@ -382,32 +383,32 @@ of syncing note.  Notes marked as deleted are not included in the list."
   (lexical-let ((index index)
                 (mark mark))
     (deferred:nextc
-      (simplenote2--get-token-deferred)
-      (lambda (token)
-        (deferred:$
-          (let ((params (list '("data" . "1")
-                              '("limit" . 100))))
-            (when mark (push (cons "mark" mark) params))
-            (request-deferred
-             (concat simplenote2--api-server-url "index")
-             :type "GET"
-             :headers (list (cons "X-Simperium-Token" simplenote2--token))
-             :params params
-             :parser 'json-read))
-          (deferred:nextc it
-            (lambda (res)
-              (if (request-response-error-thrown res)
-                  (progn (message "Could not get index") t)
-                (mapc (lambda (e)
-                        (if (equal (cdr (assq 'deleted (cdr (assq 'd e)))) :json-false)
-                          (push (cons (cdr (assq 'id e))
-                                    (cdr (assq 'v e))) index)))
-                      (cdr (assq 'index (request-response-data res))))
-                (if (assq 'mark (request-response-data res))
-                    (simplenote2--get-index-deferred
-                     index
-                     (cdr (assq 'mark (request-response-data res))))
-                  index)))))))))
+     (simplenote2--get-token-deferred)
+     (lambda (token)
+       (deferred:$
+        (let ((params (list '("data" . "1")
+                            '("limit" . 100))))
+          (when mark (push (cons "mark" mark) params))
+          (request-deferred
+           (concat simplenote2--api-server-url "index")
+           :type "GET"
+           :headers (list (cons "X-Simperium-Token" simplenote2--token))
+           :params params
+           :parser 'json-read))
+        (deferred:nextc it
+                        (lambda (res)
+                          (if (request-response-error-thrown res)
+                              (progn (message "Could not get index") t)
+                            (mapc (lambda (e)
+                                    (if (member (cdr (assq 'deleted (cdr (assq 'd e)))) '(:json-false 0))
+                                        (push (cons (cdr (assq 'id e))
+                                                    (cdr (assq 'v e))) index)))
+                                  (cdr (assq 'index (request-response-data res))))
+                            (if (assq 'mark (request-response-data res))
+                                (simplenote2--get-index-deferred
+                                 index
+                                 (cdr (assq 'mark (request-response-data res))))
+                              index)))))))))
 
 (defun simplenote2--get-note-deferred (key)
   "Get note information for KEY including content from server."
